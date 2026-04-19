@@ -6,7 +6,6 @@ from tasks.example_dag.task1 import get_server_info
 @dag(
     dag_id="example_hello_world",
     schedule=None,
-    queue="test",
     catchup=False,
     tags=["example"],
 )
