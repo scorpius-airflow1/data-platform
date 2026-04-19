@@ -1,6 +1,6 @@
 from airflow.decorators import dag
 from datetime import datetime
-from pipelines.tasks.hello_task import get_server_info
+from tasks.hello_task import get_server_info
 
 
 @dag(
