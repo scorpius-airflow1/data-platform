@@ -1,6 +1,6 @@
 x-airflow-common: &airflow-common
   build:
-    context: .
+    context: ..
     args:
       EXTRA_REQUIREMENTS: ${_PIP_ADDITIONAL_REQUIREMENTS}
   env_file:
