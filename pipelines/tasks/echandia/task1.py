@@ -2,7 +2,8 @@
 # RetailCo — Ejercicio 6: Pipeline ETL optimizado
 # Usa executemany para insertar en batch — mucho más rápido
 # ============================================================
-from io import StringIO
+from io import StringIO, BytesIO
+from airflow.providers.amazon.aws.hooks.s3 import S3Hook
 import pandas as pd
 import psycopg2
 import os
@@ -62,13 +63,26 @@ def insert_multi(df: pd.DataFrame, table: str):
 # FUNCIÓN 1 — EXTRAER
 # ============================================================
 @task(queue="test1")
-def extraer(ruta: str) -> pd.DataFrame:
-    log(f"EXTRAER → Leyendo archivo: {ruta}")
-    if not os.path.exists(ruta):
-        log(f"ERROR: El archivo no existe en {ruta}")
+def extraer(bucket_name: str, file_key: str, conn_id: str = "aws_default") -> pd.DataFrame:
+    log(f"EXTRAER → Conectando a S3 (Bucket: {bucket_name}, Archivo: {file_key})")
+
+    # 1. Instanciar el Hook de Airflow
+    s3_hook = S3Hook(aws_conn_id=conn_id)
+
+    # 2. Verificar si el archivo existe en el bucket
+    if not s3_hook.check_for_key(file_key, bucket_name):
+        log(f"ERROR: El archivo {file_key} no existe en el bucket {bucket_name}")
         sys.exit(1)
-    df = pd.read_csv(ruta, encoding="utf-8", on_bad_lines="skip")
-    log(f"EXTRAER → Registros entrantes: {len(df):,}")
+
+    # 3. Descargar el archivo a memoria
+    archivo_obj = s3_hook.get_key(file_key, bucket_name)
+    contenido = archivo_obj.get()['Body'].read()
+
+    # 4. Cargar en Pandas
+    # Usamos io.BytesIO para que pandas lo lea como si fuera un archivo local
+    df = pd.read_csv(BytesIO(contenido), encoding="utf-8", on_bad_lines="skip")
+
+    log(f"EXTRAER → Registros entrantes desde S3: {len(df):,}")
     return df
 
 
@@ -274,15 +288,11 @@ def cargar(df: pd.DataFrame, conn) -> dict:
 # EJECUCIÓN PRINCIPAL
 # ============================================================
 if __name__ == "__main__":
-    BASE_DIR     = os.path.dirname(os.path.abspath(__file__))
-    RUTA_DEFAULT = os.path.join(BASE_DIR, "..", "data", "amazon_sale_report.csv")
-    ruta_csv     = sys.argv[1] if len(sys.argv) > 1 else RUTA_DEFAULT
-
     print("=" * 60)
     print("PIPELINE ETL — RetailCo")
     print("=" * 60)
 
-    df_crudo  = extraer(ruta_csv)
+    df_crudo  = extraer("airflow-245039720023-us-east-2-an", "amazon_sale_report.csv", "s3_conn_logs")
     df_limpio = transformar(df_crudo)
 
     try:
