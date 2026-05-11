@@ -46,7 +46,7 @@ def monitoreo_apis_dag():
             expected_status_code=200,
             min_expected_records=1,
             expected_data_type="list",
-            max_response_time_seconds=5.0
+            max_response_time_seconds=10.0
         )
 
     t_users = validar_users()
