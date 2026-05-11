@@ -87,8 +87,11 @@ def validar_api(
         error_msg = f"{type(e).__name__}: {str(e)}"
         resultado["error"] = error_msg
         
-        # Registrar el error en los logs
-        log.error(f"❌ Error validando {endpoint}: {error_msg}")
+        # Registrar el error en los logs (a prueba de balas)
+        try:
+            log.error(f"❌ Error validando {endpoint}: {error_msg}")
+        except Exception:
+            pass  # Si falla el log remoto (ej. S3), no rompas la tarea
 
     # Retornar el reporte final (se ejecuta pase lo que pase)
     return resultado
