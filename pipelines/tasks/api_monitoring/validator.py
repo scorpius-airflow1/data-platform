@@ -15,20 +15,13 @@ def validar_api(
     # Inicializar logger para esta tarea
     log = logging.getLogger("airflow.task")
     
-    # Obtener la conexión desde Airflow
-    log.info(f"Obteniendo conexión: {connection_id}")
-    conn = BaseHook.get_connection(connection_id)
-    
-    # Armar la URL completa
-    url = f"{conn.schema}://{conn.host}{endpoint}"
-    log.info(f"URL construida: {url}")
-    
-    # Iniciar cronómetro
+    # Iniciar cronómetro (antes de intentar cualquier cosa)
     start_time = time.time()
 
+    # Crear el reporte base asumiendo fracaso desde el principio
     resultado = {
         "api": endpoint,
-        "url": url,
+        "url": None,  # Se llena si llegamos a la conexión
         "exito": False,
         "status_code": None,
         "cantidad_registros": 0,
@@ -38,6 +31,16 @@ def validar_api(
     }
 
     try:
+        # 1. Obtener la conexión (PROTEGIDO)
+        log.info(f"Obteniendo conexión: {connection_id}")
+        conn = BaseHook.get_connection(connection_id)
+        
+        # 2. Armar la URL completa (PROTEGIDO)
+        url = f"{conn.schema}://{conn.host}{endpoint}"
+        resultado["url"] = url
+        log.info(f"URL construida: {url}")
+        
+        # 3. Hacer la petición
         import requests
         
         log.info(f"Haciendo petición GET a {url}")
@@ -47,25 +50,25 @@ def validar_api(
         resultado["tiempo_respuesta_segundos"] = round(tiempo_total, 4)
         log.info(f"Respuesta recibida en {resultado['tiempo_respuesta_segundos']} segundos")
 
-        # 1. Validar Status Code
+        # 4. Validar Status Code
         log.info(f"Status code recibido: {response.status_code}")
         resultado["status_code"] = response.status_code
         
         if response.status_code != expected_status_code:
             raise ValueError(f"Status code incorrecto. Se esperaba {expected_status_code} y se recibió {response.status_code}")
 
-        # 2. Parsear la respuesta a JSON
+        # 5. Parsear la respuesta a JSON
         log.info("Parseando respuesta a JSON...")
         data = response.json()
 
-        # 3. Validar estructura (tipo de dato)
+        # 6. Validar estructura (tipo de dato)
         log.info(f"Tipo de dato recibido: {type(data).__name__}")
         if expected_data_type == "list":
             if not isinstance(data, list):
                 raise TypeError(f"Se esperaba una lista pero se recibió {type(data).__name__}")
             resultado["validacion_estructura"] = True
             
-            # 4. Validar cantidad de registros
+            # 7. Validar cantidad de registros
             resultado["cantidad_registros"] = len(data)
             log.info(f"Cantidad de registros: {resultado['cantidad_registros']}")
 
@@ -79,7 +82,7 @@ def validar_api(
         log.info(f"✅ API {endpoint} validada exitosamente")
 
     except Exception as e:
-        # Calcular tiempo aunque haya fallado
+        # Calcular tiempo aunque haya fallado antes de la petición
         tiempo_total = time.time() - start_time
         resultado["tiempo_respuesta_segundos"] = round(tiempo_total, 4)
         
@@ -87,11 +90,11 @@ def validar_api(
         error_msg = f"{type(e).__name__}: {str(e)}"
         resultado["error"] = error_msg
         
-        # Registrar el error en los logs (a prueba de balas)
+        # Registrar el error en los logs (a prueba de balas por si S3 falla)
         try:
             log.error(f"❌ Error validando {endpoint}: {error_msg}")
         except Exception:
-            pass  # Si falla el log remoto (ej. S3), no rompas la tarea
+            pass  # Si falla el log remoto, no rompas la tarea
 
     # Retornar el reporte final (se ejecuta pase lo que pase)
     return resultado
