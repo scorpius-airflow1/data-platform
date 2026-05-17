@@ -1,3 +1,4 @@
+import os
 import boto3
 import requests
 import logging
@@ -15,10 +16,6 @@ S3_PREFIX = "raw/nyc_taxi"
 
 
 def download_nyc_taxi(year: int, month: int, tmp_dir: str = "/tmp") -> str:
-    """
-    Descarga el parquet de NYC Taxi para el año/mes indicado.
-    Retorna la ruta local del archivo descargado.
-    """
     url = NYC_TAXI_URL.format(year=year, month=month)
     filename = f"yellow_tripdata_{year}-{month:02d}.parquet"
     local_path = Path(tmp_dir) / filename
@@ -36,15 +33,17 @@ def download_nyc_taxi(year: int, month: int, tmp_dir: str = "/tmp") -> str:
 
 
 def upload_to_s3(local_path: str, year: int, month: int) -> str:
-    """
-    Sube el archivo local a S3 bajo raw/nyc_taxi/YYYY/MM/
-    Retorna la clave S3 donde quedó guardado.
-    """
     filename = Path(local_path).name
     s3_key = f"{S3_PREFIX}/{year}/{month:02d}/{filename}"
 
     logger.info(f"Subiendo a s3://{S3_BUCKET}/{s3_key}")
-    s3 = boto3.client("s3", region_name="us-east-2")
+
+    s3 = boto3.client(
+        "s3",
+        region_name="us-east-2",
+        aws_access_key_id=os.environ["AWS_ACCESS_KEY_ID"],
+        aws_secret_access_key=os.environ["AWS_SECRET_ACCESS_KEY"],
+    )
     s3.upload_file(local_path, S3_BUCKET, s3_key)
 
     logger.info(f"Upload completado: {s3_key}")
@@ -52,6 +51,5 @@ def upload_to_s3(local_path: str, year: int, month: int) -> str:
 
 
 def cleanup_local(local_path: str) -> None:
-    """Elimina el archivo temporal local para no llenar el disco."""
     Path(local_path).unlink(missing_ok=True)
     logger.info(f"Temporal eliminado: {local_path}")
