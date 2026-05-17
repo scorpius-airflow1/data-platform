@@ -33,6 +33,8 @@ def download_nyc_taxi(year: int, month: int, tmp_dir: str = "/tmp") -> str:
 
 
 def upload_to_s3(local_path: str, year: int, month: int) -> str:
+    from airflow.models import Variable  # ← lee desde Airflow DB
+
     filename = Path(local_path).name
     s3_key = f"{S3_PREFIX}/{year}/{month:02d}/{filename}"
 
@@ -41,8 +43,8 @@ def upload_to_s3(local_path: str, year: int, month: int) -> str:
     s3 = boto3.client(
         "s3",
         region_name="us-east-2",
-        aws_access_key_id=os.environ["AWS_ACCESS_KEY_ID"],
-        aws_secret_access_key=os.environ["AWS_SECRET_ACCESS_KEY"],
+        aws_access_key_id=Variable.get("aws_access_key_id"),
+        aws_secret_access_key=Variable.get("aws_secret_access_key"),
     )
     s3.upload_file(local_path, S3_BUCKET, s3_key)
 
