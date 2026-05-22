@@ -1,5 +1,6 @@
 from airflow.sdk import dag, task
 from airflow.providers.amazon.aws.hooks.s3 import S3Hook
+import pyarrow.parquet as pq
 import pandas as pd
 import io
 from datetime import datetime
@@ -23,12 +24,11 @@ def quality_nyc_taxi():
     def limpiar_y_guardar():
         hook = S3Hook(aws_conn_id="aws_default")
         
-        # 1. Descargar directamente
+        # 1. Descargar directamente usando PyArrow (No llena la RAM)
         obj = hook.get_key(key=S3_KEY_RAW, bucket_name=S3_BUCKET)
-        data = obj.get()["Body"].read()
+        df = pq.read_table(obj.get()["Body"].read()).to_pandas()
         
         # 2. Limpiar
-        df = pd.read_parquet(io.BytesIO(data))
         df = clean_nyc_nulls(df)
         df = filter_positive_duration(df, "tpep_pickup_datetime", "tpep_dropoff_datetime")
         
