@@ -7,7 +7,7 @@ from datetime import datetime
 from tasks.quality.clean_nyc import clean_nyc_nulls
 from tasks.quality.validators import filter_positive_duration
 
-S3_BUCKET = "scorpius-airflow-2026"
+S3_BUCKET = "scorpius-airflow-logs-2026"
 S3_KEY_RAW = "raw/nyc_taxi/2024/01/yellow_tripdata_2024-01.parquet"
 S3_KEY_CLEAN = "clean/nyc_taxi/yellow_tripdata_2024-01_clean.parquet"
 
