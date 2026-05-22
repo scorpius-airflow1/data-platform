@@ -17,7 +17,7 @@ def quality_amazon_delivery():
 
     @task
     def leer_desde_s3() -> bytes:
-        hook = S3Hook(aws_conn_id="aws_default")
+        hook = S3Hook(aws_conn_id="aws_s3_logs_2026")
         obj = hook.get_key(
             key="raw/amazon_delivery/amazon_delivery.csv",
             bucket_name="scorpius-airflow-logs-2026"
