@@ -9,7 +9,6 @@ from tasks.quality.validators import filter_gps_valid, filter_positive_duration
 
 @dag(
     dag_id="quality_nyc_taxi",
-    schedule_interval=None,
     start_date=datetime(2024, 1, 1),
     catchup=False,
     tags=["quality", "nyc_taxi"],

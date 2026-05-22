@@ -9,7 +9,6 @@ from tasks.quality.validators import filter_gps_valid
 
 @dag(
     dag_id="quality_amazon_delivery",
-    schedule_interval=None,
     start_date=datetime(2024, 1, 1),
     catchup=False,
     tags=["quality", "amazon_delivery"],
