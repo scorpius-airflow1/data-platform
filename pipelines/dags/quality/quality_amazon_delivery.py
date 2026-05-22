@@ -4,8 +4,8 @@ import pandas as pd
 import io
 from datetime import datetime
 
-from pipelines.tasks.quality.clean_amazon import clean_amazon_nulls
-from pipelines.tasks.quality.validators import filter_gps_valid
+from tasks.quality.clean_amazon import clean_amazon_nulls
+from tasks.quality.validators import filter_gps_valid
 
 @dag(
     dag_id="quality_amazon_delivery",

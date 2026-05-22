@@ -4,8 +4,8 @@ import pandas as pd
 import io
 from datetime import datetime
 
-from pipelines.tasks.quality.clean_nyc import clean_nyc_nulls
-from pipelines.tasks.quality.validators import filter_gps_valid, filter_positive_duration
+from tasks.quality.clean_nyc import clean_nyc_nulls
+from tasks.quality.validators import filter_gps_valid, filter_positive_duration
 
 @dag(
     dag_id="quality_nyc_taxi",
