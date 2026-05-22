@@ -2,6 +2,7 @@ from airflow.sdk import dag, task
 from airflow.providers.amazon.aws.hooks.s3 import S3Hook
 import pandas as pd
 import io
+import json
 from datetime import datetime
 
 from tasks.quality.clean_amazon import clean_amazon_nulls
@@ -16,29 +17,32 @@ from tasks.quality.validators import filter_gps_valid
 def quality_amazon_delivery():
 
     @task
-    def leer_desde_s3() -> bytes:
+    def leer_desde_s3() -> str:
         hook = S3Hook(aws_conn_id="aws_default")
         obj = hook.get_key(
             key="raw/amazon_delivery/amazon_delivery.csv",
             bucket_name="scorpius-airflow-logs-2026"
         )
-        return obj.get()["Body"].read()
+        raw_bytes = obj.get()["Body"].read()
+        df = pd.read_csv(io.BytesIO(raw_bytes))
+        return df.to_json(orient="records")
 
     @task
-    def limpiar(data: bytes) -> bytes:
-        df = pd.read_csv(io.BytesIO(data))
+    def limpiar(data: str) -> str:
+        df = pd.read_json(data, orient="records")
         df = clean_amazon_nulls(df)
         df = filter_gps_valid(df, "Store_Latitude", "Store_Longitude")
         df = filter_gps_valid(df, "Drop_Latitude", "Drop_Longitude")
-        buffer = io.BytesIO()
-        df.to_parquet(buffer, index=False)
-        return buffer.getvalue()
+        return df.to_json(orient="records")
 
     @task
-    def guardar_en_s3(data: bytes):
+    def guardar_en_s3(data: str):
+        df = pd.read_json(data, orient="records")
         hook = S3Hook(aws_conn_id="aws_default")
+        buffer = io.BytesIO()
+        df.to_parquet(buffer, index=False)
         hook.load_bytes(
-            bytes_data=data,
+            bytes_data=buffer.getvalue(),
             key="clean/amazon_delivery/amazon_delivery_clean.parquet",
             bucket_name="scorpius-airflow-logs-2026",
             replace=True
