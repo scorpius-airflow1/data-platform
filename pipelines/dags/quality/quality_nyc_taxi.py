@@ -23,26 +23,32 @@ def quality_nyc_taxi():
     def limpiar_y_guardar():
         hook = S3Hook(aws_conn_id="aws_default")
         
-        # 1. Leer SOLO las 5 columnas necesarias con PyArrow (Evita el error OOM)
-        obj = hook.get_key(key=S3_KEY_RAW, bucket_name=S3_BUCKET)
+        # 1. Descargar directamente en un buffer de memoria seguro para PyArrow
+        response = hook.get_key(key=S3_KEY_RAW, bucket_name=S3_BUCKET).get()
+        buffer = io.BytesIO(response["Body"].read())
+        
+        # 2. Leer SOLO las 5 columnas necesarias desde el buffer
         table = pq.read_table(
-            obj.get()["Body"].read(),
+            buffer,
             columns=["tpep_pickup_datetime", "tpep_dropoff_datetime", "passenger_count", "trip_distance", "total_amount"]
         )
         
-        # 2. Convertir a Pandas (ahora es muy ligero, no llena la RAM)
+        # Cerramos el buffer para liberar la memoria de los 47MB crudos
+        buffer.close()
+        
+        # 3. Convertir a Pandas (muy ligero)
         df = table.to_pandas()
         
-        # 3. Limpiar datos (funciones del M3)
+        # 4. Limpiar datos (funciones del M3)
         df = clean_nyc_nulls(df)
         df = filter_positive_duration(df, "tpep_pickup_datetime", "tpep_dropoff_datetime")
         
-        # 4. Guardar en S3
-        buffer = io.BytesIO()
-        df.to_parquet(buffer, index=False)
+        # 5. Guardar en S3
+        output_buffer = io.BytesIO()
+        df.to_parquet(output_buffer, index=False)
         
         hook.load_file_obj(
-            file_obj=buffer,
+            file_obj=output_buffer,
             key=S3_KEY_CLEAN,
             bucket_name=S3_BUCKET,
             replace=True
