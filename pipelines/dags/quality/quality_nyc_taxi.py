@@ -46,6 +46,7 @@ def quality_nyc_taxi():
         # 5. Guardar en S3
         output_buffer = io.BytesIO()
         df.to_parquet(output_buffer, index=False)
+        output_buffer.seek(0)
         
         hook.load_file_obj(
             file_obj=output_buffer,
