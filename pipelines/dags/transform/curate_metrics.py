@@ -50,6 +50,10 @@ def curate_metrics():
         obj = hook.get_key(key="clean/amazon_delivery/amazon_delivery_clean.parquet", bucket_name=S3_BUCKET)
         data = obj.get()["Body"].read()
         df = pd.read_parquet(io.BytesIO(data))
+
+         # --- TRAMPA DE DEBUGGING INICIO ---
+        print("¡ATENCION! Estas son las columnas del archivo de Amazon:", df.columns.tolist())
+        # --- TRAMPA DE DEBUGGING FIN ---
         
         # 2. Aplicar lógica de M3
         df_kpis = calcular_kpis_amazon(df)
