@@ -5,6 +5,8 @@
 import pandas as pd
 import numpy as np
 
+from pipelines.tasks.metrics.feature_engineering import agregar_trip_duration, agregar_z_score_duracion
+
 
 def calcular_kpis_nyc(df: pd.DataFrame) -> pd.DataFrame:
     """Calcula KPIs 1, 2, 5, 7, 8 desde NYC Taxi."""
@@ -12,29 +14,22 @@ def calcular_kpis_nyc(df: pd.DataFrame) -> pd.DataFrame:
     if df.empty:
         raise ValueError("El DataFrame de NYC Taxi está vacío. Verifica la capa clean/.")
 
-    # Conversión robusta de fechas
-    df['trip_duration_min'] = (
-        pd.to_datetime(df['tpep_dropoff_datetime'], errors='coerce') -
-        pd.to_datetime(df['tpep_pickup_datetime'], errors='coerce')
-    ).dt.total_seconds() / 60
+    # Ahora usa las funciones de feature_engineering en lugar de calcular aquí
+    df = agregar_trip_duration(df)
+    df = agregar_z_score_duracion(df)
 
-    # Eliminar filas con fechas corruptas
-    df = df.dropna(subset=['trip_duration_min'])
 
-    # KPI 1: Tiempo promedio de ruta
+    # KPI 1 y 2
     kpi1 = df['trip_duration_min'].mean()
-
-    # KPI 2: Desviación estándar del tiempo de viaje
-    kpi2 = df['trip_duration_min'].std()
+    kpi2 = df['trip_duration_min'].std()    
 
     # KPI 7 y KPI 5: protegidos contra desviación estándar = 0
     if kpi2 == 0:
         kpi7 = 0
         kpi5 = 0.0
     else:
-        z_scores = np.abs((df['trip_duration_min'] - kpi1) / kpi2)
-        kpi7 = int((z_scores > 3).sum())
-        kpi5 = float(df.loc[z_scores > 3, 'total_amount'].sum())
+        kpi7 = int((df['z_score_duracion'] > 3).sum())
+        kpi5 = float(df.loc[df['z_score_duracion'] > 3, 'total_amount'].sum())
 
     # KPI 8: Porcentaje de duplicados
     total = len(df)

@@ -4,3 +4,7 @@
 master/dags
 airflow/
 venv/
+*.parquet
+*.csv
+test_*.py
+__pycache__/
