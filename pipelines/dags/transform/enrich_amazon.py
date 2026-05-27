@@ -5,8 +5,7 @@ import io
 from datetime import datetime
 
 S3_BUCKET = "scorpius-airflow-logs-2026"
-# Apuntamos a la carpeta (prefijo) en lugar de a un archivo fijo
-S3_FOLDER_INPUT = "clean/amazon_delivery/"
+S3_KEY_INPUT = "clean/amazon_delivery/amazon_delivery_clean.parquet"
 S3_KEY_OUTPUT = "curated/amazon_enriched.parquet"
 
 @dag(
@@ -21,30 +20,14 @@ def enrich_amazon_delivery():
     def enriquecer_y_guardar():
         hook = S3Hook(aws_conn_id="aws_default")
 
-        # 1. Listar los archivos dentro de la carpeta de S3
-        print(f"Buscando archivos en: s3://{S3_BUCKET}/{S3_FOLDER_INPUT}")
-        all_keys = hook.list_keys(bucket_name=S3_BUCKET, prefix=S3_FOLDER_INPUT)
-        
-        # Filtrar para evitar carpetas vacías o archivos ocultos, nos quedamos con los .parquet
-        valid_files = [k for k in all_keys if k.endswith('.parquet')]
-        
-        if not valid_files:
-            raise FileNotFoundError(f"No se encontraron archivos Parquet en s3://{S3_BUCKET}/{S3_FOLDER_INPUT}")
-        
-        # Tomamos el primer archivo encontrado (que es donde dejó los datos clean_amazon.py)
-        archivo_a_leer = valid_files[0]
-        print(f"Leyendo archivo encontrado: {archivo_a_leer}")
-
-        # 2. Leer los bytes del archivo y cargarlo a Pandas
-        file_content = hook.read_key(key=archivo_a_leer, bucket_name=S3_BUCKET)
-        # Validamos si viene como string o bytes para evitar errores de codificación
-        bytes_data = file_content.encode('utf-8') if isinstance(file_content, str) else file_content
-        df = pd.read_parquet(io.BytesIO(bytes_data))
+        # 1. Leer desde clean/ correctamente como bytes
+        response = hook.get_key(key=S3_KEY_INPUT, bucket_name=S3_BUCKET).get()
+        df = pd.read_parquet(io.BytesIO(response["Body"].read()))
 
         filas_originales = len(df)
-        print(f"Filas leídas correctamente: {filas_originales}")
+        print(f"Filas leídas desde clean/: {filas_originales}")
 
-        # 3. Categorizar Delivery_Time
+        # 2. Categorizar Delivery_Time
         def categorizar_entrega(minutos):
             if minutos < 90:
                 return "Rápido"
@@ -56,12 +39,12 @@ def enrich_amazon_delivery():
         df['categoria_entrega'] = df['Delivery_Time'].apply(categorizar_entrega)
 
         print(f"Distribución de categorías:")
-        print(df['categoria_entrega'].value_counts())
+        print(df['categoria_entrega'].value_counts().to_string())
 
-        # 4. Verificar que no se perdieron filas
+        # 3. Verificar que no se perdieron filas
         assert len(df) == filas_originales, "ERROR: se perdieron filas"
 
-        # 5. Guardar el resultado en la capa Curated (como un archivo consolidado)
+        # 4. Guardar en curated/
         buffer = io.BytesIO()
         df.to_parquet(buffer, index=False)
         buffer.seek(0)
@@ -72,7 +55,7 @@ def enrich_amazon_delivery():
             bucket_name=S3_BUCKET,
             replace=True
         )
-        print(f"¡Éxito! Guardado en S3: {S3_KEY_OUTPUT} — {len(df)} filas.")
+        print(f"Guardado en S3: curated/amazon_enriched.parquet — {len(df)} filas, {len(df.columns)} columnas")
 
     enriquecer_y_guardar()
 
