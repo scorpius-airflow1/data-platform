@@ -5,7 +5,7 @@
 import pandas as pd
 import numpy as np
 
-from pipelines.tasks.metrics.feature_engineering import agregar_trip_duration, agregar_z_score_duracion
+from tasks.metrics.feature_engineering import agregar_trip_duration, agregar_z_score_duracion
 
 
 def calcular_kpis_nyc(df: pd.DataFrame) -> pd.DataFrame:
