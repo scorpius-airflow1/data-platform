@@ -37,92 +37,78 @@ def calcular_kpis_nyc(df: pd.DataFrame) -> pd.DataFrame:
     kpi8 = round((duplicados / total) * 100, 2) if total > 0 else 0
 
     return pd.DataFrame([{
-        'kpi':            'tiempo_promedio_ruta_min',
-        'valor':          round(kpi1, 2),
-        'dataset':        'nyc_taxi',
-        'zona':           'global',
-        'fecha_calculo':  pd.Timestamp.now()
+        'kpi': 'tiempo_promedio_ruta_min',  'valor': round(kpi1, 2), 'dataset': 'nyc_taxi', 'tipo_dimension': 'global', 'valor_dimension': 'global', 'fecha_calculo': pd.Timestamp.now()
     }, {
-        'kpi':            'std_tiempo_viaje_min',
-        'valor':          round(kpi2, 2),
-        'dataset':        'nyc_taxi',
-        'zona':           'global',
-        'fecha_calculo':  pd.Timestamp.now()
+        'kpi': 'std_tiempo_viaje_min',       'valor': round(kpi2, 2), 'dataset': 'nyc_taxi', 'tipo_dimension': 'global', 'valor_dimension': 'global', 'fecha_calculo': pd.Timestamp.now()
     }, {
-        'kpi':            'rutas_atipicas_count',
-        'valor':          float(kpi7),
-        'dataset':        'nyc_taxi',
-        'zona':           'global',
-        'fecha_calculo':  pd.Timestamp.now()
+        'kpi': 'rutas_atipicas_count',       'valor': float(kpi7),    'dataset': 'nyc_taxi', 'tipo_dimension': 'global', 'valor_dimension': 'global', 'fecha_calculo': pd.Timestamp.now()
     }, {
-        'kpi':            'costo_ineficiencia_usd',
-        'valor':          round(kpi5, 2),
-        'dataset':        'nyc_taxi',
-        'zona':           'global',
-        'fecha_calculo':  pd.Timestamp.now()
+        'kpi': 'costo_ineficiencia_usd',     'valor': round(kpi5, 2), 'dataset': 'nyc_taxi', 'tipo_dimension': 'global', 'valor_dimension': 'global', 'fecha_calculo': pd.Timestamp.now()
     }, {
-        'kpi':            'pct_registros_duplicados',
-        'valor':          float(kpi8),
-        'dataset':        'nyc_taxi',
-        'zona':           'global',
-        'fecha_calculo':  pd.Timestamp.now()
+        'kpi': 'pct_registros_duplicados',   'valor': float(kpi8),    'dataset': 'nyc_taxi', 'tipo_dimension': 'global', 'valor_dimension': 'global', 'fecha_calculo': pd.Timestamp.now()
     }])
 
 
 def calcular_kpis_amazon(df: pd.DataFrame) -> pd.DataFrame:
-    """Calcula KPIs 3, 4, 9, 10 desde Amazon Delivery."""
+    """Calcula KPIs 3, 4, 9, 10 desde Amazon Delivery agrupados por dimensión."""
 
     if df.empty:
         raise ValueError("El DataFrame de Amazon Delivery está vacío. Verifica la capa clean/.")
 
-    total = len(df)
     timestamp = pd.Timestamp.now()
 
-    # KPI 3 y 4: Tasa de entregas
-    completadas = int((df['Delivery_Time'] > 0).sum())
-    fallidas = total - completadas
-    kpi3 = round((completadas / total) * 100, 2) if total > 0 else 0
-    kpi4 = round((fallidas / total) * 100, 2) if total > 0 else 0
+    # KPI 3 y 4: Tasa de entregas completadas y fallidas POR ZONA
+    tasa_por_zona = (
+        df.groupby('Area')
+        .apply(lambda x: pd.Series({
+            'completadas': round((x['Delivery_Time'] > 0).sum() / len(x) * 100, 2),
+            'fallidas':    round((x['Delivery_Time'] == 0).sum() / len(x) * 100, 2)
+        }))
+        .reset_index()
+    )
 
-    # KPI 9: Zonas críticas con mayor tiempo acumulado
-    zonas = (
+    kpi3 = tasa_por_zona[['Area', 'completadas']].rename(
+        columns={'Area': 'valor_dimension', 'completadas': 'valor'}
+    )
+    kpi3['kpi']             = 'tasa_entregas_completadas_pct'
+    kpi3['tipo_dimension']  = 'zona_geografica'
+    kpi3['dataset']         = 'amazon_delivery'
+    kpi3['fecha_calculo']   = timestamp
+
+    kpi4 = tasa_por_zona[['Area', 'fallidas']].rename(
+        columns={'Area': 'valor_dimension', 'fallidas': 'valor'}
+    )
+    kpi4['kpi']             = 'tasa_entregas_fallidas_pct'
+    kpi4['tipo_dimension']  = 'zona_geografica'
+    kpi4['dataset']         = 'amazon_delivery'
+    kpi4['fecha_calculo']   = timestamp
+
+    # KPI 9: Zonas críticas (ya estaba por zona, solo se ajusta estructura)
+    kpi9 = (
         df.groupby('Area')['Delivery_Time']
         .sum()
         .reset_index()
-        .rename(columns={'Area': 'zona', 'Delivery_Time': 'valor'})
+        .rename(columns={'Area': 'valor_dimension', 'Delivery_Time': 'valor'})
         .sort_values('valor', ascending=False)
         .head(5)
     )
-    zonas['kpi']           = 'zona_critica_retraso'
-    zonas['dataset']       = 'amazon_delivery'
-    zonas['fecha_calculo'] = timestamp
-    zonas['valor']         = zonas['valor'].astype(float)
+    kpi9['kpi']             = 'zona_critica_retraso'
+    kpi9['tipo_dimension']  = 'zona_geografica'
+    kpi9['dataset']         = 'amazon_delivery'
+    kpi9['fecha_calculo']   = timestamp
+    kpi9['valor']           = kpi9['valor'].astype(float)
 
-    # KPI 10: Incidencias por vehículo
-    incidencias = (
+    # KPI 10: Incidencias por vehículo (ya estaba por vehículo, solo se ajusta estructura)
+    kpi10 = (
         df.groupby('Vehicle')
         .size()
         .reset_index(name='valor')
-        .rename(columns={'Vehicle': 'zona'})
+        .rename(columns={'Vehicle': 'valor_dimension'})
     )
-    incidencias['kpi']           = 'incidencias_por_vehiculo'
-    incidencias['dataset']       = 'amazon_delivery'
-    incidencias['fecha_calculo'] = timestamp
-    incidencias['valor']         = incidencias['valor'].astype(float)
+    kpi10['kpi']            = 'incidencias_por_vehiculo'
+    kpi10['tipo_dimension'] = 'tipo_vehiculo'
+    kpi10['dataset']        = 'amazon_delivery'
+    kpi10['fecha_calculo']  = timestamp
+    kpi10['valor']          = kpi10['valor'].astype(float)
 
-    # KPIs globales
-    resumen = pd.DataFrame([{
-        'kpi':           'tasa_entregas_completadas_pct',
-        'valor':         float(kpi3),
-        'dataset':       'amazon_delivery',
-        'zona':          'global',
-        'fecha_calculo': timestamp
-    }, {
-        'kpi':           'tasa_entregas_fallidas_pct',
-        'valor':         float(kpi4),
-        'dataset':       'amazon_delivery',
-        'zona':          'global',
-        'fecha_calculo': timestamp
-    }])
-
-    return pd.concat([resumen, zonas, incidencias], ignore_index=True)
+    return pd.concat([kpi3, kpi4, kpi9, kpi10], ignore_index=True)
