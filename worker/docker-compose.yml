@@ -33,6 +33,7 @@ services:
     environment:
       DUMB_INIT_SETSID: "0"
       PYTHONPATH: /opt/pipelines
+      AIRFLOW__WORKER__WORKER_LOG_SERVER_HOST: "${WORKER_LOG_IP}"
     restart: always
 
 volumes:
