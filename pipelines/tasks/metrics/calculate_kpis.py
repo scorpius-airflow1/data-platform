@@ -23,7 +23,7 @@ def calcular_kpis_nyc(df: pd.DataFrame) -> pd.DataFrame:
     kpi1 = df['trip_duration_min'].mean()
     kpi2 = df['trip_duration_min'].std()    
 
-    # KPI 7 y KPI 5: protegidos contra desviación estándar = 0
+    # KPI 7 y 5: protegidos contra desviación estándar = 0
     if kpi2 == 0:
         kpi7 = 0
         kpi5 = 0.0
