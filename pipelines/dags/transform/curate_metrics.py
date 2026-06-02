@@ -19,10 +19,9 @@ def curate_metrics():
     @task
     def procesar_nyc():
         hook = S3Hook(aws_conn_id="aws_default")
-
+        
         obj = hook.get_key(key="clean/nyc_taxi/yellow_tripdata_2024-01_clean.parquet", bucket_name=S3_BUCKET)
         data = obj.get()["Body"].read()
-        # ✅ PyArrow en lugar de pandas directo — evita OOM en t3.small
         df = pq.read_table(io.BytesIO(data)).to_pandas()
 
         df_kpis = calcular_kpis_nyc(df)
@@ -42,13 +41,10 @@ def curate_metrics():
     @task
     def procesar_amazon():
         hook = S3Hook(aws_conn_id="aws_default")
-
+        
         obj = hook.get_key(key="clean/amazon_delivery/amazon_delivery_clean.parquet", bucket_name=S3_BUCKET)
         data = obj.get()["Body"].read()
-        # ✅ PyArrow en lugar de pandas directo
         df = pq.read_table(io.BytesIO(data)).to_pandas()
-
-        print("¡ATENCION! Estas son las columnas del archivo de Amazon:", df.columns.tolist())
 
         df_kpis = calcular_kpis_amazon(df)
 
@@ -64,7 +60,10 @@ def curate_metrics():
         )
         print("KPIs de Amazon guardados en curated/")
 
-    procesar_nyc()
-    procesar_amazon()
+    # Secuencia obligatoria para evitar OOM (Out of Memory)
+    nyc = procesar_nyc()
+    amazon = procesar_amazon()
+    
+    nyc >> amazon
 
 curate_metrics()
