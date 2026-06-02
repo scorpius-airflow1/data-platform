@@ -18,7 +18,6 @@ def calcular_kpis_nyc(df: pd.DataFrame) -> pd.DataFrame:
     df = agregar_trip_duration(df)
     df = agregar_z_score_duracion(df)
 
-
     # KPI 1 y 2
     kpi1 = df['trip_duration_min'].mean()
     kpi2 = df['trip_duration_min'].std()    
@@ -59,11 +58,11 @@ def calcular_kpis_amazon(df: pd.DataFrame) -> pd.DataFrame:
 
     # KPI 3 y 4: Tasa de entregas completadas y fallidas POR ZONA
     tasa_por_zona = (
-        df.groupby('Area')
+        df.groupby('Area', group_keys=False)
         .apply(lambda x: pd.Series({
             'completadas': round((x['Delivery_Time'] > 0).sum() / len(x) * 100, 2),
             'fallidas':    round((x['Delivery_Time'] == 0).sum() / len(x) * 100, 2)
-        }))
+        }), include_groups=False)
         .reset_index()
     )
 
@@ -85,7 +84,7 @@ def calcular_kpis_amazon(df: pd.DataFrame) -> pd.DataFrame:
 
     # KPI 9: Zonas críticas (ya estaba por zona, solo se ajusta estructura)
     kpi9 = (
-        df.groupby('Area')['Delivery_Time']
+        df.groupby('Area', group_keys=False)['Delivery_Time']
         .sum()
         .reset_index()
         .rename(columns={'Area': 'valor_dimension', 'Delivery_Time': 'valor'})
@@ -100,7 +99,7 @@ def calcular_kpis_amazon(df: pd.DataFrame) -> pd.DataFrame:
 
     # KPI 10: Incidencias por vehículo (ya estaba por vehículo, solo se ajusta estructura)
     kpi10 = (
-        df.groupby('Vehicle')
+        df.groupby('Vehicle', group_keys=False)
         .size()
         .reset_index(name='valor')
         .rename(columns={'Vehicle': 'valor_dimension'})
