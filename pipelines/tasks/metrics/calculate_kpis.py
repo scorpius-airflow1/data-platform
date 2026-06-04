@@ -1,7 +1,3 @@
-# Estas funciones deben leer un DataFrame (limpio)
-# y devolver un nuevo DataFrame resumido
-# Salida optimizada para consumo en Power BI
-
 import pandas as pd
 import numpy as np
 
@@ -9,105 +5,59 @@ from tasks.metrics.feature_engineering import agregar_trip_duration, agregar_z_s
 
 
 def calcular_kpis_nyc(df: pd.DataFrame) -> pd.DataFrame:
-    """Calcula KPIs 1, 2, 5, 7, 8 desde NYC Taxi."""
+    """Calcula KPIs de NYC Taxi agrupados por HORA del día para Power BI."""
 
     if df.empty:
         raise ValueError("El DataFrame de NYC Taxi está vacío. Verifica la capa clean/.")
 
-    # Ahora usa las funciones de feature_engineering en lugar de calcular aquí
+    # 1. Feature Engineering
     df = agregar_trip_duration(df)
     df = agregar_z_score_duracion(df)
 
-    # KPI 1 y 2
-    kpi1 = df['trip_duration_min'].mean()
-    kpi2 = df['trip_duration_min'].std()    
+    # 2. Extraer la hora del día (Lo que M4 necesita)
+    df['hora_dia'] = pd.to_datetime(df['tpep_pickup_datetime']).dt.hour
 
-    # KPI 7 y 5: protegidos contra desviación estándar = 0
-    if kpi2 == 0:
-        kpi7 = 0
-        kpi5 = 0.0
-    else:
-        kpi7 = int((df['z_score_duracion'] > 3).sum())
-        kpi5 = float(df.loc[df['z_score_duracion'] > 3, 'total_amount'].sum())
+    # 3. Agrupar por hora y calcular KPIs
+    def calcular_grupo_nyc(grupo):
+        atipicas = (grupo['z_score_duracion'] > 3).sum()
+        return pd.Series({
+            'tiempo_promedio_ruta_min': round(grupo['trip_duration_min'].mean(), 2),
+            'rutas_atipicas_count': int(atipicas),
+            'costo_ineficiencia_usd': round(float(grupo.loc[grupo['z_score_duracion'] > 3, 'total_amount'].sum()), 2)
+        })
 
-    # KPI 8: Porcentaje de duplicados
-    total = len(df)
-    duplicados = int(df.duplicated().sum())
-    kpi8 = round((duplicados / total) * 100, 2) if total > 0 else 0
+    df_resultado = df.groupby('hora_dia', group_keys=False).apply(calcular_grupo_nyc, include_groups=False).reset_index()
 
-    return pd.DataFrame([{
-        'kpi': 'tiempo_promedio_ruta_min',  'valor': round(kpi1, 2), 'dataset': 'nyc_taxi', 'tipo_dimension': 'global', 'valor_dimension': 'global', 'fecha_calculo': pd.Timestamp.now()
-    }, {
-        'kpi': 'std_tiempo_viaje_min',       'valor': round(kpi2, 2), 'dataset': 'nyc_taxi', 'tipo_dimension': 'global', 'valor_dimension': 'global', 'fecha_calculo': pd.Timestamp.now()
-    }, {
-        'kpi': 'rutas_atipicas_count',       'valor': float(kpi7),    'dataset': 'nyc_taxi', 'tipo_dimension': 'global', 'valor_dimension': 'global', 'fecha_calculo': pd.Timestamp.now()
-    }, {
-        'kpi': 'costo_ineficiencia_usd',     'valor': round(kpi5, 2), 'dataset': 'nyc_taxi', 'tipo_dimension': 'global', 'valor_dimension': 'global', 'fecha_calculo': pd.Timestamp.now()
-    }, {
-        'kpi': 'pct_registros_duplicados',   'valor': float(kpi8),    'dataset': 'nyc_taxi', 'tipo_dimension': 'global', 'valor_dimension': 'global', 'fecha_calculo': pd.Timestamp.now()
-    }])
+    return df_resultado
 
 
-def calcular_kpis_amazon(df: pd.DataFrame) -> pd.DataFrame:
-    """Calcula KPIs 3, 4, 9, 10 desde Amazon Delivery agrupados por dimensión."""
+def calcular_kpis_amazon(df: pd.DataFrame) -> dict:
+    """Calcula KPIs de Amazon y devuelve un DICCIONARIO con dos DataFrames separados para Power BI."""
 
     if df.empty:
         raise ValueError("El DataFrame de Amazon Delivery está vacío. Verifica la capa clean/.")
 
-    timestamp = pd.Timestamp.now()
+    # 1. Vista por ZONA
+    def calcular_grupo_zona(grupo):
+        total = len(grupo)
+        completadas = (grupo['Delivery_Time'] > 0).sum()
+        fallidas = (grupo['Delivery_Time'] == 0).sum()
+        return pd.Series({
+            'tasa_entregas_completadas_pct': round((completadas / total) * 100, 2) if total > 0 else 0.0,
+            'tasa_entregas_fallidas_pct': round((fallidas / total) * 100, 2) if total > 0 else 0.0,
+            'zona_critica_retraso': float(grupo['Delivery_Time'].sum())
+        })
 
-    # KPI 3 y 4: Tasa de entregas completadas y fallidas POR ZONA
-    tasa_por_zona = (
-        df.groupby('Area', group_keys=False)
-        .apply(lambda x: pd.Series({
-            'completadas': round((x['Delivery_Time'] > 0).sum() / len(x) * 100, 2),
-            'fallidas':    round((x['Delivery_Time'] == 0).sum() / len(x) * 100, 2)
-        }), include_groups=False)
-        .reset_index()
-    )
+    df_zona = df.groupby('Area', group_keys=False).apply(calcular_grupo_zona, include_groups=False).reset_index()
+    df_zona = df_zona.rename(columns={'Area': 'zona'}) # M4 necesita la columna llamada 'zona'
 
-    kpi3 = tasa_por_zona[['Area', 'completadas']].rename(
-        columns={'Area': 'valor_dimension', 'completadas': 'valor'}
-    )
-    kpi3['kpi']             = 'tasa_entregas_completadas_pct'
-    kpi3['tipo_dimension']  = 'zona_geografica'
-    kpi3['dataset']         = 'amazon_delivery'
-    kpi3['fecha_calculo']   = timestamp
+    # 2. Vista por VEHÍCULO
+    df_vehiculo = df.groupby('Vehicle', group_keys=False).size().reset_index(name='incidencias_por_vehiculo')
+    df_vehiculo = df_vehiculo.rename(columns={'Vehicle': 'vehiculo'}) # M4 necesita la columna llamada 'vehiculo'
+    df_vehiculo['incidencias_por_vehiculo'] = df_vehiculo['incidencias_por_vehiculo'].astype(float)
 
-    kpi4 = tasa_por_zona[['Area', 'fallidas']].rename(
-        columns={'Area': 'valor_dimension', 'fallidas': 'valor'}
-    )
-    kpi4['kpi']             = 'tasa_entregas_fallidas_pct'
-    kpi4['tipo_dimension']  = 'zona_geografica'
-    kpi4['dataset']         = 'amazon_delivery'
-    kpi4['fecha_calculo']   = timestamp
-
-    # KPI 9: Zonas críticas (ya estaba por zona, solo se ajusta estructura)
-    kpi9 = (
-        df.groupby('Area', group_keys=False)['Delivery_Time']
-        .sum()
-        .reset_index()
-        .rename(columns={'Area': 'valor_dimension', 'Delivery_Time': 'valor'})
-        .sort_values('valor', ascending=False)
-        .head(5)
-    )
-    kpi9['kpi']             = 'zona_critica_retraso'
-    kpi9['tipo_dimension']  = 'zona_geografica'
-    kpi9['dataset']         = 'amazon_delivery'
-    kpi9['fecha_calculo']   = timestamp
-    kpi9['valor']           = kpi9['valor'].astype(float)
-
-    # KPI 10: Incidencias por vehículo (ya estaba por vehículo, solo se ajusta estructura)
-    kpi10 = (
-        df.groupby('Vehicle', group_keys=False)
-        .size()
-        .reset_index(name='valor')
-        .rename(columns={'Vehicle': 'valor_dimension'})
-    )
-    kpi10['kpi']            = 'incidencias_por_vehiculo'
-    kpi10['tipo_dimension'] = 'tipo_vehiculo'
-    kpi10['dataset']        = 'amazon_delivery'
-    kpi10['fecha_calculo']  = timestamp
-    kpi10['valor']          = kpi10['valor'].astype(float)
-
-    return pd.concat([kpi3, kpi4, kpi9, kpi10], ignore_index=True)
+    # Devolvemos un diccionario para que el DAG los guarde como 2 archivos Parquet separados en S3
+    return {
+        "vista_zona": df_zona,
+        "vista_vehiculo": df_vehiculo
+    }

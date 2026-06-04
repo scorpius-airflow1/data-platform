@@ -24,19 +24,20 @@ def curate_metrics():
         data = obj.get()["Body"].read()
         df = pq.read_table(io.BytesIO(data)).to_pandas()
 
+        # Ahora devuelve un DataFrame agrupado por hora
         df_kpis = calcular_kpis_nyc(df)
 
         buffer = io.BytesIO()
         df_kpis.to_parquet(buffer, index=False)
-        buffer.seek(0)
+        buffer.seek(0) # Regla de oro de Scorpius
 
         hook.load_file_obj(
             file_obj=buffer,
-            key="curated/kpis_nyc.parquet",
+            key="curated/nyc_vista_hora.parquet", # Nombre exacto para M4
             bucket_name=S3_BUCKET,
             replace=True
         )
-        print("KPIs de NYC guardados en curated/")
+        print("KPIs de NYC por hora guardados en curated/")
 
     @task
     def procesar_amazon():
@@ -46,19 +47,34 @@ def curate_metrics():
         data = obj.get()["Body"].read()
         df = pq.read_table(io.BytesIO(data)).to_pandas()
 
-        df_kpis = calcular_kpis_amazon(df)
+        # Ahora devuelve un DICCIONARIO con dos DataFrames
+        kpis_dict = calcular_kpis_amazon(df)
 
-        buffer = io.BytesIO()
-        df_kpis.to_parquet(buffer, index=False)
-        buffer.seek(0)
-
+        # 1. Guardar Vista por Zona
+        buffer_zona = io.BytesIO()
+        kpis_dict["vista_zona"].to_parquet(buffer_zona, index=False)
+        buffer_zona.seek(0) # Regla de oro
+        
         hook.load_file_obj(
-            file_obj=buffer,
-            key="curated/kpis_amazon.parquet",
+            file_obj=buffer_zona,
+            key="curated/amazon_vista_zona.parquet",
             bucket_name=S3_BUCKET,
             replace=True
         )
-        print("KPIs de Amazon guardados en curated/")
+        print("Vista por zona de Amazon guardada en curated/")
+
+        # 2. Guardar Vista por Vehículo
+        buffer_vehiculo = io.BytesIO()
+        kpis_dict["vista_vehiculo"].to_parquet(buffer_vehiculo, index=False)
+        buffer_vehiculo.seek(0) # Regla de oro
+        
+        hook.load_file_obj(
+            file_obj=buffer_vehiculo,
+            key="curated/amazon_vista_vehiculo.parquet",
+            bucket_name=S3_BUCKET,
+            replace=True
+        )
+        print("Vista por vehículo de Amazon guardada en curated/")
 
     # Secuencia obligatoria para evitar OOM (Out of Memory)
     nyc = procesar_nyc()
