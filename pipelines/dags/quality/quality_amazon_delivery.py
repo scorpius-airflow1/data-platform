@@ -31,8 +31,10 @@ def quality_amazon_delivery():
         
         buffer = io.BytesIO()
         df.to_parquet(buffer, index=False)
-        hook.load_bytes(
-            bytes_data=buffer.getvalue(),
+        buffer.seek(0) # <-- REGLA DE ORO SCORPIUS
+        
+        hook.load_file_obj( # <-- Cambiado a load_file_obj por estandarización
+            file_obj=buffer,
             key="clean/amazon_delivery/amazon_delivery_clean.parquet",
             bucket_name=S3_BUCKET,
             replace=True
