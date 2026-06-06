@@ -5,7 +5,7 @@ from datetime import datetime
 @dag(
     dag_id="master_orchestrator",
     start_date=datetime(2024, 1, 1),
-    schedule="@daily",
+    schedule=None,
     catchup=False,
     tags=["orchestrator", "master"],
 )
