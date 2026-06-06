@@ -1,5 +1,5 @@
 from datetime import datetime
-from airflow.sdk import dag, task  # <-- CORREGIDO A SDK (Airflow 3.x)
+from airflow.sdk import dag, task
 from tasks.ingest.download_nyc import download_nyc_taxi, upload_to_s3, cleanup_local
 
 YEAR = 2024
@@ -16,19 +16,12 @@ MONTH = 1
 def ingest_nyc_taxi():
 
     @task()
-    def download(year: int, month: int) -> str:
-        return download_nyc_taxi(year=year, month=month)
-
-    @task()
-    def upload(local_path: str, year: int, month: int) -> str:
-        return upload_to_s3(local_path=local_path, year=year, month=month)
-
-    @task()
-    def cleanup(local_path: str) -> None:
+    def ingest_nyc_pipeline(year: int, month: int):
+        """Descarga, sube a S3 y limpia en el mismo Worker para evitar FileNotFoundError"""
+        local_path = download_nyc_taxi(year=year, month=month)
+        upload_to_s3(local_path=local_path, year=year, month=month)
         cleanup_local(local_path)
 
-    local_file = download(YEAR, MONTH)
-    s3_key = upload(local_file, YEAR, MONTH)
-    cleanup(local_file)
+    ingest_nyc_pipeline(YEAR, MONTH)
 
 ingest_nyc_taxi()
